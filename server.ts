@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import db, { initDb } from './server/db';
+import db, { initDb, getDb } from './server/db';
 
 async function startServer() {
   const app = express();
@@ -15,13 +15,14 @@ async function startServer() {
 
   // Helper to run queries consistently
   const query = async (text: string, params: any[] = []) => {
+    const activeDb = getDb();
     if (isPostgres) {
-      const res = await db.query(text, params);
+      const res = await activeDb.query(text, params);
       return { rows: res.rows, lastInsertId: res.rows[0]?.id };
     } else {
       // Convert $1, $2 to ? for sqlite
       const sqliteText = text.replace(/\$(\d+)/g, '?');
-      const stmt = db.prepare(sqliteText);
+      const stmt = activeDb.prepare(sqliteText);
       if (text.trim().toUpperCase().startsWith('SELECT')) {
         return { rows: stmt.all(...params) };
       } else {
@@ -30,6 +31,20 @@ async function startServer() {
       }
     }
   };
+
+  // Health check
+  app.get('/api/health', async (req, res) => {
+    try {
+      const dbStatus = await query('SELECT count(*) as count FROM categories');
+      res.json({ 
+        status: 'ok', 
+        database: isPostgres ? 'PostgreSQL' : 'SQLite',
+        categoriesCount: dbStatus.rows[0]?.count || 0
+      });
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: (error as any).message });
+    }
+  });
 
   // API Routes
   app.get('/api/menu', async (req, res) => {

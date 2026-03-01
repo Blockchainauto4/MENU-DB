@@ -5,55 +5,61 @@ const isPostgres = !!process.env.DATABASE_URL;
 
 let db: any;
 
-if (isPostgres) {
-  db = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
-  });
-} else {
-  db = new Database('menu.db');
-}
-
 export const initDb = async () => {
   if (isPostgres) {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS categories (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        "order" INTEGER DEFAULT 0
-      );
+    console.log('Connecting to PostgreSQL (Neon)...');
+    const { Pool } = await import('pg');
+    db = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
 
-      CREATE TABLE IF NOT EXISTS menu_items (
-        id SERIAL PRIMARY KEY,
-        category_id INTEGER REFERENCES categories(id),
-        name TEXT NOT NULL,
-        description TEXT,
-        image_url TEXT,
-        icon TEXT,
-        prices TEXT NOT NULL,
-        "order" INTEGER DEFAULT 0
-      );
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS categories (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          "order" INTEGER DEFAULT 0
+        );
 
-      CREATE TABLE IF NOT EXISTS orders (
-        id SERIAL PRIMARY KEY,
-        table_number TEXT,
-        items TEXT NOT NULL,
-        total DECIMAL(10,2) NOT NULL,
-        status TEXT DEFAULT 'pending',
-        type TEXT DEFAULT 'order',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+        CREATE TABLE IF NOT EXISTS menu_items (
+          id SERIAL PRIMARY KEY,
+          category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          description TEXT,
+          image_url TEXT,
+          icon TEXT,
+          prices TEXT NOT NULL,
+          "order" INTEGER DEFAULT 0
+        );
 
-    // Check if we need to seed
-    const res = await db.query('SELECT count(*) FROM categories');
-    if (parseInt(res.rows[0].count) === 0) {
-      console.log('Seeding PostgreSQL database...');
-      await seed(true);
+        CREATE TABLE IF NOT EXISTS orders (
+          id SERIAL PRIMARY KEY,
+          table_number TEXT,
+          items TEXT NOT NULL,
+          total DECIMAL(10,2) NOT NULL,
+          status TEXT DEFAULT 'pending',
+          type TEXT DEFAULT 'order',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      const res = await db.query('SELECT count(*) FROM categories');
+      if (parseInt(res.rows[0].count) === 0) {
+        console.log('Database empty. Seeding initial data...');
+        await seed(true);
+      } else {
+        console.log('Database already contains data. Skipping seed.');
+      }
+    } catch (err) {
+      console.error('Error initializing PostgreSQL:', err);
+      throw err;
     }
   } else {
+    console.log('Connecting to SQLite (Local)...');
+    const Database = (await import('better-sqlite3')).default;
+    db = new Database('menu.db');
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +69,7 @@ export const initDb = async () => {
 
       CREATE TABLE IF NOT EXISTS menu_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category_id INTEGER REFERENCES categories(id),
+        category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         description TEXT,
         image_url TEXT,
@@ -85,11 +91,13 @@ export const initDb = async () => {
 
     const count = db.prepare('SELECT count(*) as count FROM categories').get() as { count: number };
     if (count.count === 0) {
-      console.log('Seeding SQLite database...');
+      console.log('SQLite empty. Seeding initial data...');
       await seed(false);
     }
   }
 };
+
+export const getDb = () => db;
 
 async function seed(postgres: boolean) {
   const categories = [
