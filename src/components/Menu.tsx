@@ -62,7 +62,7 @@ const MenuItem = ({ name, description, image_url, prices, icon, onAdd }: MenuIte
           </div>
           
           <div className="flex flex-wrap gap-2">
-            {prices.map((p, index) => (
+            {Array.isArray(prices) && prices.map((p, index) => (
               <button 
                 key={index} 
                 onClick={() => onAdd?.(p.price, p.label)}
@@ -96,15 +96,27 @@ export default function Menu() {
   const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   useEffect(() => {
+    // Try to load from cache first
+    const cachedMenu = localStorage.getItem('menu_cache');
+    if (cachedMenu) {
+      try {
+        setMenuData(JSON.parse(cachedMenu));
+        setLoading(false);
+      } catch (e) {
+        console.error("Failed to parse cached menu", e);
+      }
+    }
+
     fetch('/api/menu')
       .then(res => res.json())
       .then(data => {
         setMenuData(data);
+        localStorage.setItem('menu_cache', JSON.stringify(data));
         setLoading(false);
       })
       .catch(err => {
         console.error("Failed to load menu", err);
-        setLoading(false);
+        if (!cachedMenu) setLoading(false);
       });
   }, []);
 

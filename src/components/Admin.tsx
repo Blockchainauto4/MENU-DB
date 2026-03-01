@@ -61,10 +61,21 @@ export default function Admin() {
   };
 
   const fetchMenu = async () => {
+    // Try to load from cache first
+    const cachedMenu = localStorage.getItem('menu_cache');
+    if (cachedMenu) {
+      try {
+        setMenu(JSON.parse(cachedMenu));
+      } catch (e) {
+        console.error("Failed to parse cached menu", e);
+      }
+    }
+
     try {
       const res = await fetch('/api/menu');
       const data = await res.json();
       setMenu(data);
+      localStorage.setItem('menu_cache', JSON.stringify(data));
     } catch (error) {
       console.error('Failed to fetch menu', error);
     }
@@ -257,7 +268,7 @@ export default function Admin() {
                         <div>
                           <div className="font-medium">{item.name}</div>
                           <div className="text-sm text-gray-400">
-                            {item.prices.map(p => `${p.label ? p.label + ': ' : ''}R$ ${p.price}`).join(' / ')}
+                            {Array.isArray(item.prices) && item.prices.map(p => `${p.label ? p.label + ': ' : ''}R$ ${p.price}`).join(' / ')}
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -316,7 +327,7 @@ function ItemModal({ item, categoryId, onSave, onClose }: any) {
       description,
       image_url: imageUrl,
       icon,
-      prices: prices.map(p => ({ label: p.label, price: Number(p.price) })).filter(p => p.price > 0)
+      prices: Array.isArray(prices) ? prices.map(p => ({ label: p.label, price: Number(p.price) })).filter(p => p.price > 0) : []
     });
   };
 
@@ -347,7 +358,7 @@ function ItemModal({ item, categoryId, onSave, onClose }: any) {
           
           <div>
             <label className="block text-sm text-gray-400 mb-1">Prices</label>
-            {prices.map((price, index) => (
+            {Array.isArray(prices) && prices.map((price, index) => (
               <div key={index} className="flex gap-2 mb-2">
                 <input 
                   placeholder="Label (e.g. 1 por)" 

@@ -1,192 +1,174 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import db, { initDb, getDb } from './server/db';
+import { INITIAL_MENU } from './src/constants/initialData.ts';
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-const isPostgres = !!process.env.DATABASE_URL;
+// In-memory data store
+let menuData = JSON.parse(JSON.stringify(INITIAL_MENU));
+let orders: any[] = [];
+let nextId = 100; // Starting ID for new items
 
-// Helper to run queries consistently
-const query = async (text: string, params: any[] = []) => {
-  const activeDb = getDb();
-  if (!activeDb) {
-    await initDb();
-  }
-  const dbInstance = getDb();
-  if (isPostgres) {
-    const res = await dbInstance.query(text, params);
-    return { rows: res.rows, lastInsertId: res.rows[0]?.id };
-  } else {
-    // Convert $1, $2 to ? for sqlite
-    const sqliteText = text.replace(/\$(\d+)/g, '?');
-    const stmt = dbInstance.prepare(sqliteText);
-    if (text.trim().toUpperCase().startsWith('SELECT')) {
-      return { rows: stmt.all(...params) };
-    } else {
-      const info = stmt.run(...params);
-      return { rows: [], lastInsertId: info.lastInsertRowid };
-    }
-  }
-};
-
-// Middleware to ensure DB is initialized
-app.use(async (req, res, next) => {
-  if (!getDb()) {
-    try {
-      await initDb();
-    } catch (err) {
-      console.error('DB Init Error:', err);
-    }
-  }
-  next();
-});
+// Helper to find and update items
+const findCategory = (id: number) => menuData.find((c: any) => c.id === id);
 
 // Health check
-app.get('/api/health', async (req, res) => {
-  try {
-    const dbStatus = await query('SELECT count(*) as count FROM categories');
-    res.json({ 
-      status: 'ok', 
-      database: isPostgres ? 'PostgreSQL' : 'SQLite',
-      categoriesCount: dbStatus.rows[0]?.count || 0
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: (error as any).message });
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    database: 'In-Memory (No DB)',
+    categoriesCount: menuData.length
+  });
+});
+
+// API Routes
+app.get('/api/menu', (req, res) => {
+  res.json(menuData);
+});
+
+app.post('/api/categories', (req, res) => {
+  const { name, order } = req.body;
+  const newCategory = {
+    id: nextId++,
+    name,
+    order: order || 0,
+    items: []
+  };
+  menuData.push(newCategory);
+  menuData.sort((a: any, b: any) => a.order - b.order);
+  res.json(newCategory);
+});
+
+app.put('/api/categories/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, order } = req.body;
+  const category = findCategory(id);
+  if (category) {
+    category.name = name;
+    category.order = order;
+    menuData.sort((a: any, b: any) => a.order - b.order);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Category not found' });
   }
 });
 
-  // API Routes
-  app.get('/api/menu', async (req, res) => {
-    try {
-      const categoriesRes = await query('SELECT * FROM categories ORDER BY "order"');
-      const itemsRes = await query('SELECT * FROM menu_items ORDER BY "order"');
+app.delete('/api/categories/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  menuData = menuData.filter((c: any) => c.id !== id);
+  res.json({ success: true });
+});
+
+app.post('/api/items', (req, res) => {
+  const { category_id, name, description, image_url, icon, prices, order } = req.body;
+  const category = findCategory(parseInt(category_id));
+  if (category) {
+    const newItem = {
+      id: nextId++,
+      category_id: parseInt(category_id),
+      name,
+      description,
+      image_url,
+      icon,
+      prices,
+      order: order || 0
+    };
+    category.items.push(newItem);
+    category.items.sort((a: any, b: any) => a.order - b.order);
+    res.json(newItem);
+  } else {
+    res.status(404).json({ error: 'Category not found' });
+  }
+});
+
+app.put('/api/items/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const { category_id, name, description, image_url, icon, prices, order } = req.body;
+  
+  let itemFound = false;
+  menuData.forEach((cat: any) => {
+    const itemIndex = cat.items.findIndex((i: any) => i.id === id);
+    if (itemIndex !== -1) {
+      const item = cat.items[itemIndex];
+      item.name = name;
+      item.description = description;
+      item.image_url = image_url;
+      item.icon = icon;
+      item.prices = prices;
+      item.order = order;
       
-      const menu = categoriesRes.rows.map((cat: any) => ({
-        ...cat,
-        items: itemsRes.rows.filter((item: any) => item.category_id === cat.id).map((item: any) => ({
-          ...item,
-          prices: JSON.parse(item.prices)
-        }))
-      }));
-      
-      res.json(menu);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to fetch menu' });
+      // If category changed
+      if (cat.id !== parseInt(category_id)) {
+        cat.items.splice(itemIndex, 1);
+        const newCat = findCategory(parseInt(category_id));
+        if (newCat) {
+          item.category_id = parseInt(category_id);
+          newCat.items.push(item);
+          newCat.items.sort((a: any, b: any) => a.order - b.order);
+        }
+      } else {
+        cat.items.sort((a: any, b: any) => a.order - b.order);
+      }
+      itemFound = true;
     }
   });
 
-  app.post('/api/categories', async (req, res) => {
-    const { name, order } = req.body;
-    try {
-      const info = await query('INSERT INTO categories (name, "order") VALUES ($1, $2) RETURNING id', [name, order || 0]);
-      res.json({ id: info.lastInsertId, name, order });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to create category' });
-    }
-  });
+  if (itemFound) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Item not found' });
+  }
+});
 
-  app.put('/api/categories/:id', async (req, res) => {
-    const { name, order } = req.body;
-    try {
-      await query('UPDATE categories SET name = $1, "order" = $2 WHERE id = $3', [name, order, req.params.id]);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to update category' });
-    }
+app.delete('/api/items/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  menuData.forEach((cat: any) => {
+    cat.items = cat.items.filter((i: any) => i.id !== id);
   });
+  res.json({ success: true });
+});
 
-  app.delete('/api/categories/:id', async (req, res) => {
-    try {
-      await query('DELETE FROM categories WHERE id = $1', [req.params.id]);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to delete category' });
-    }
-  });
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+  if (password === 'admin123') {
+    res.json({ token: 'demo-token' });
+  } else {
+    res.status(401).json({ error: 'Invalid password' });
+  }
+});
 
-  app.post('/api/items', async (req, res) => {
-    const { category_id, name, description, image_url, icon, prices, order } = req.body;
-    try {
-      const info = await query(
-        'INSERT INTO menu_items (category_id, name, description, image_url, icon, prices, "order") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [category_id, name, description, image_url, icon, JSON.stringify(prices), order || 0]
-      );
-      res.json({ id: info.lastInsertId });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to create item' });
-    }
-  });
+app.get('/api/orders', (req, res) => {
+  res.json(orders.filter(o => o.status === 'pending'));
+});
 
-  app.put('/api/items/:id', async (req, res) => {
-    const { category_id, name, description, image_url, icon, prices, order } = req.body;
-    try {
-      await query(
-        'UPDATE menu_items SET category_id = $1, name = $2, description = $3, image_url = $4, icon = $5, prices = $6, "order" = $7 WHERE id = $8',
-        [category_id, name, description, image_url, icon, JSON.stringify(prices), order, req.params.id]
-      );
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to update item' });
-    }
-  });
+app.post('/api/orders', (req, res) => {
+  const { table_number, items, total, type } = req.body;
+  const newOrder = {
+    id: nextId++,
+    table_number,
+    items,
+    total,
+    type: type || 'order',
+    status: 'pending',
+    created_at: new Date().toISOString()
+  };
+  orders.push(newOrder);
+  res.json({ id: newOrder.id, success: true });
+});
 
-  app.delete('/api/items/:id', async (req, res) => {
-    try {
-      await query('DELETE FROM menu_items WHERE id = $1', [req.params.id]);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to delete item' });
-    }
-  });
-
-  app.post('/api/auth/login', (req, res) => {
-    const { password } = req.body;
-    if (password === 'admin123') {
-      res.json({ token: 'demo-token' });
-    } else {
-      res.status(401).json({ error: 'Invalid password' });
-    }
-  });
-
-  app.get('/api/orders', async (req, res) => {
-    try {
-      const ordersRes = await query("SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at ASC");
-      const parsedOrders = ordersRes.rows.map((order: any) => ({
-        ...order,
-        items: JSON.parse(order.items)
-      }));
-      res.json(parsedOrders);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch orders' });
-    }
-  });
-
-  app.post('/api/orders', async (req, res) => {
-    const { table_number, items, total, type } = req.body;
-    try {
-      const info = await query(
-        'INSERT INTO orders (table_number, items, total, type) VALUES ($1, $2, $3, $4) RETURNING id',
-        [table_number, JSON.stringify(items), total, type || 'order']
-      );
-      res.json({ id: info.lastInsertId, success: true });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to create order' });
-    }
-  });
-
-  app.put('/api/orders/:id/complete', async (req, res) => {
-    try {
-      await query("UPDATE orders SET status = 'completed' WHERE id = $1", [req.params.id]);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to complete order' });
-    }
-  });
+app.put('/api/orders/:id/complete', (req, res) => {
+  const id = parseInt(req.params.id);
+  const order = orders.find(o => o.id === id);
+  if (order) {
+    order.status = 'completed';
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Order not found' });
+  }
+});
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
