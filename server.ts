@@ -2,49 +2,61 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import db, { initDb, getDb } from './server/db';
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  app.use(express.json());
+app.use(express.json());
 
-  // Initialize DB
-  await initDb();
+const isPostgres = !!process.env.DATABASE_URL;
 
-  const isPostgres = !!process.env.DATABASE_URL;
-
-  // Helper to run queries consistently
-  const query = async (text: string, params: any[] = []) => {
-    const activeDb = getDb();
-    if (isPostgres) {
-      const res = await activeDb.query(text, params);
-      return { rows: res.rows, lastInsertId: res.rows[0]?.id };
+// Helper to run queries consistently
+const query = async (text: string, params: any[] = []) => {
+  const activeDb = getDb();
+  if (!activeDb) {
+    await initDb();
+  }
+  const dbInstance = getDb();
+  if (isPostgres) {
+    const res = await dbInstance.query(text, params);
+    return { rows: res.rows, lastInsertId: res.rows[0]?.id };
+  } else {
+    // Convert $1, $2 to ? for sqlite
+    const sqliteText = text.replace(/\$(\d+)/g, '?');
+    const stmt = dbInstance.prepare(sqliteText);
+    if (text.trim().toUpperCase().startsWith('SELECT')) {
+      return { rows: stmt.all(...params) };
     } else {
-      // Convert $1, $2 to ? for sqlite
-      const sqliteText = text.replace(/\$(\d+)/g, '?');
-      const stmt = activeDb.prepare(sqliteText);
-      if (text.trim().toUpperCase().startsWith('SELECT')) {
-        return { rows: stmt.all(...params) };
-      } else {
-        const info = stmt.run(...params);
-        return { rows: [], lastInsertId: info.lastInsertRowid };
-      }
+      const info = stmt.run(...params);
+      return { rows: [], lastInsertId: info.lastInsertRowid };
     }
-  };
+  }
+};
 
-  // Health check
-  app.get('/api/health', async (req, res) => {
+// Middleware to ensure DB is initialized
+app.use(async (req, res, next) => {
+  if (!getDb()) {
     try {
-      const dbStatus = await query('SELECT count(*) as count FROM categories');
-      res.json({ 
-        status: 'ok', 
-        database: isPostgres ? 'PostgreSQL' : 'SQLite',
-        categoriesCount: dbStatus.rows[0]?.count || 0
-      });
-    } catch (error) {
-      res.status(500).json({ status: 'error', message: (error as any).message });
+      await initDb();
+    } catch (err) {
+      console.error('DB Init Error:', err);
     }
-  });
+  }
+  next();
+});
+
+// Health check
+app.get('/api/health', async (req, res) => {
+  try {
+    const dbStatus = await query('SELECT count(*) as count FROM categories');
+    res.json({ 
+      status: 'ok', 
+      database: isPostgres ? 'PostgreSQL' : 'SQLite',
+      categoriesCount: dbStatus.rows[0]?.count || 0
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: (error as any).message });
+  }
+});
 
   // API Routes
   app.get('/api/menu', async (req, res) => {
@@ -184,14 +196,13 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Production static file serving would go here
-    // But for this environment we mainly care about dev mode
     app.use(express.static('dist'));
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
+  if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 
-startServer();
+export default app;
