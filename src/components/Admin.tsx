@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Plus, Edit2, Save, X, CheckCircle, Clock } from 'lucide-react';
+import { Trash2, Plus, Edit2, Save, X, CheckCircle, Clock, RotateCcw } from 'lucide-react';
 
 interface Category {
   id: number;
@@ -269,7 +269,7 @@ export default function Admin() {
                 onClick={resetMenu}
                 className="bg-red-900/40 border border-red-500/50 text-red-200 px-4 py-2 rounded hover:bg-red-900/60 flex items-center gap-2 transition-colors"
               >
-                <Icons.RotateCcw size={18} />
+                <RotateCcw size={18} />
                 Reset Menu
               </button>
             </div>

@@ -26,6 +26,46 @@ const INITIAL_MENU = [
         icon: "GlassWater",
         prices: [{ label: "Copo", price: 28.00 }],
         order: 1
+      },
+      {
+        id: 10,
+        category_id: 1,
+        name: "Copão de Gin",
+        description: "Gin tônica refrescante",
+        image_url: "https://images.unsplash.com/photo-1574071318508-1cdbad80ad38?w=800&auto=format&fit=crop",
+        icon: "GlassWater",
+        prices: [{ label: "1 por", price: 13.00 }, { label: "2 por", price: 20.00 }],
+        order: 2
+      },
+      {
+        id: 11,
+        category_id: 1,
+        name: "Copão de Whisky",
+        description: "Whisky de qualidade",
+        image_url: "https://images.unsplash.com/photo-1527281473222-793879cd4cdd?w=800&auto=format&fit=crop",
+        icon: "GlassWater",
+        prices: [{ label: "Unidade", price: 30.00 }],
+        order: 3
+      },
+      {
+        id: 12,
+        category_id: 1,
+        name: "Xeque-mate",
+        description: "Bebida mista de mate e rum",
+        image_url: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=800&auto=format&fit=crop",
+        icon: "GlassWater",
+        prices: [{ label: "1 por", price: 15.00 }, { label: "2 por", price: 25.00 }],
+        order: 4
+      },
+      {
+        id: 13,
+        category_id: 1,
+        name: "Vinho Cantinho do Vale",
+        description: "Vinho tinto suave",
+        image_url: "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=800&auto=format&fit=crop",
+        icon: "GlassWater",
+        prices: [{ label: "1 por", price: 8.00 }, { label: "2 por", price: 15.00 }],
+        order: 5
       }
     ]
   },
@@ -36,24 +76,34 @@ const INITIAL_MENU = [
     order: 1,
     items: [
       {
-        id: 3,
+        id: 5,
+        category_id: 2,
+        name: "Eisenbahn",
+        description: "Cerveja Pilsen 355ml",
+        image_url: "https://images.unsplash.com/photo-1618885472179-5e474019f2a9?w=800&auto=format&fit=crop",
+        icon: "Beer",
+        prices: [{ label: "Unidade", price: 5.00 }],
+        order: 0
+      },
+      {
+        id: 6,
         category_id: 2,
         name: "Heineken",
         description: "Long Neck 330ml",
         image_url: "https://images.unsplash.com/photo-1618885472179-5e474019f2a9?w=800&auto=format&fit=crop",
         icon: "Beer",
-        prices: [{ label: "Unidade", price: 12.00 }],
-        order: 0
+        prices: [{ label: "Unidade", price: 8.00 }],
+        order: 1
       },
       {
-        id: 4,
+        id: 7,
         category_id: 2,
         name: "Brahma",
         description: "Lata 350ml",
         image_url: "https://images.unsplash.com/photo-1584225064785-c62a8b43d148?w=800&auto=format&fit=crop",
         icon: "Beer",
         prices: [{ label: "Unidade", price: 6.00 }],
-        order: 1
+        order: 2
       }
     ]
   },
@@ -64,7 +114,7 @@ const INITIAL_MENU = [
     order: 2,
     items: [
       {
-        id: 5,
+        id: 8,
         category_id: 3,
         name: "Batata Frita",
         description: "Porção generosa com queijo e bacon",
@@ -72,6 +122,34 @@ const INITIAL_MENU = [
         icon: "Utensils",
         prices: [{ label: "Meia", price: 25.00 }, { label: "Inteira", price: 45.00 }],
         order: 0
+      }
+    ]
+  },
+  {
+    id: 4,
+    name: "Bebidas Sem Álcool",
+    icon: "CupSoda",
+    order: 3,
+    items: [
+      {
+        id: 20,
+        category_id: 4,
+        name: "Água",
+        description: "Mineral 500ml",
+        image_url: "https://images.unsplash.com/photo-1548919973-5dea5846f669?w=800&auto=format&fit=crop",
+        icon: "Droplets",
+        prices: [{ label: "Unidade", price: 2.00 }],
+        order: 0
+      },
+      {
+        id: 21,
+        category_id: 4,
+        name: "Coca-Cola",
+        description: "Lata 350ml",
+        image_url: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&auto=format&fit=crop",
+        icon: "CupSoda",
+        prices: [{ label: "Unidade", price: 5.00 }],
+        order: 1
       }
     ]
   }
