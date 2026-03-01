@@ -101,6 +101,21 @@ export default function Admin() {
     fetchOrders();
   };
 
+  const resetMenu = async () => {
+    if (!confirm('This will reset the menu to default. All changes will be lost. Continue?')) return;
+    const res = await fetch('/api/admin/reset-menu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'admin123' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setMenu(data.menu);
+      localStorage.setItem('menu_cache', JSON.stringify(data.menu));
+      alert('Menu reset successfully!');
+    }
+  };
+
   const deleteItem = async (id: number) => {
     if (!confirm('Are you sure?')) return;
     await fetch(`/api/items/${id}`, { method: 'DELETE' });
@@ -241,7 +256,7 @@ export default function Admin() {
           /* Menu Management Tab */
           <>
             {/* Add Category */}
-            <div className="bg-white/5 p-4 rounded-lg mb-8 flex gap-2">
+            <div className="bg-white/5 p-4 rounded-lg mb-8 flex gap-2 items-center">
               <input
                 type="text"
                 placeholder="New Category Name"
@@ -250,6 +265,13 @@ export default function Admin() {
                 className="flex-1 bg-black/20 border border-white/10 rounded px-3 py-2"
               />
               <button onClick={addCategory} className="bg-amber-600 px-4 py-2 rounded hover:bg-amber-700">Add Category</button>
+              <button 
+                onClick={resetMenu}
+                className="bg-red-900/40 border border-red-500/50 text-red-200 px-4 py-2 rounded hover:bg-red-900/60 flex items-center gap-2 transition-colors"
+              >
+                <Icons.RotateCcw size={18} />
+                Reset Menu
+              </button>
             </div>
 
             <div className="space-y-8">

@@ -110,8 +110,20 @@ export default function Menu() {
     fetch('/api/menu')
       .then(res => res.json())
       .then(data => {
-        setMenuData(data);
-        localStorage.setItem('menu_cache', JSON.stringify(data));
+        if (Array.isArray(data) && data.length > 0) {
+          setMenuData(data);
+          localStorage.setItem('menu_cache', JSON.stringify(data));
+        } else if (Array.isArray(data) && data.length === 0 && !cachedMenu) {
+          // If server returns empty and we have nothing in cache, 
+          // it might be a server initialization issue or empty DB.
+          setMenuData([]);
+        } else if (Array.isArray(data) && data.length === 0 && cachedMenu) {
+          // Keep the cache if server returns empty (could be a transient error or sync issue)
+          // unless we are sure the menu is supposed to be empty.
+          // For now, let's just update it to allow empty menus if that's the intent.
+          setMenuData(data);
+          localStorage.setItem('menu_cache', JSON.stringify(data));
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -119,6 +131,22 @@ export default function Menu() {
         if (!cachedMenu) setLoading(false);
       });
   }, []);
+
+  const refreshMenu = () => {
+    setLoading(true);
+    localStorage.removeItem('menu_cache');
+    fetch('/api/menu')
+      .then(res => res.json())
+      .then(data => {
+        setMenuData(data);
+        localStorage.setItem('menu_cache', JSON.stringify(data));
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to refresh menu", err);
+        setLoading(false);
+      });
+  };
 
   const filteredMenu = useMemo(() => {
     return menuData.map(cat => ({
@@ -237,6 +265,13 @@ export default function Menu() {
             <p className="text-amber-500 font-medium tracking-widest uppercase text-xs mt-1">Gastrobar & Cultura</p>
           </div>
           <div className="flex gap-2">
+            <button 
+              onClick={refreshMenu}
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors border border-white/10 backdrop-blur-md"
+              title="Atualizar Cardápio"
+            >
+              <Icons.RotateCcw size={20} />
+            </button>
             <button 
               onClick={() => setShowWaiterModal(true)}
               className="p-3 bg-red-500/20 hover:bg-red-500/40 text-red-500 rounded-full transition-colors border border-red-500/20 backdrop-blur-md"
